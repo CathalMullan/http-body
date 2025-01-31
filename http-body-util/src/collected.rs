@@ -104,7 +104,7 @@ mod tests {
 
     #[tokio::test]
     async fn full_body() {
-        let body = Full::new(&b"hello"[..]);
+        let body = Full::<_, Infallible>::new(&b"hello"[..]);
 
         let buffered = body.collect().await.unwrap();
 

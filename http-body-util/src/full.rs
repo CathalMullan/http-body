@@ -3,18 +3,20 @@ use http_body::{Body, Frame, SizeHint};
 use pin_project_lite::pin_project;
 use std::borrow::Cow;
 use std::convert::{Infallible, TryFrom};
+use std::marker::PhantomData;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 pin_project! {
     /// A body that consists of a single chunk.
     #[derive(Clone, Copy, Debug)]
-    pub struct Full<D> {
+    pub struct Full<D, E = Infallible> {
         data: Option<D>,
+        _marker: PhantomData<fn() -> E>,
     }
 }
 
-impl<D> Full<D>
+impl<D, E> Full<D, E>
 where
     D: Buf,
 {
@@ -25,16 +27,20 @@ where
         } else {
             None
         };
-        Full { data }
+
+        Full {
+            data,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<D> Body for Full<D>
+impl<D, E> Body for Full<D, E>
 where
     D: Buf,
 {
     type Data = D;
-    type Error = Infallible;
+    type Error = E;
 
     fn poll_frame(
         mut self: Pin<&mut Self>,
@@ -55,17 +61,20 @@ where
     }
 }
 
-impl<D> Default for Full<D>
+impl<D, E> Default for Full<D, E>
 where
     D: Buf,
 {
     /// Create an empty `Full`.
     fn default() -> Self {
-        Full { data: None }
+        Full {
+            data: None,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<D> From<Bytes> for Full<D>
+impl<D, E> From<Bytes> for Full<D, E>
 where
     D: Buf + From<Bytes>,
 {
@@ -74,7 +83,7 @@ where
     }
 }
 
-impl<D> From<Vec<u8>> for Full<D>
+impl<D, E> From<Vec<u8>> for Full<D, E>
 where
     D: Buf + From<Vec<u8>>,
 {
@@ -83,7 +92,7 @@ where
     }
 }
 
-impl<D> From<&'static [u8]> for Full<D>
+impl<D, E> From<&'static [u8]> for Full<D, E>
 where
     D: Buf + From<&'static [u8]>,
 {
@@ -92,7 +101,7 @@ where
     }
 }
 
-impl<D, B> From<Cow<'static, B>> for Full<D>
+impl<D, E, B> From<Cow<'static, B>> for Full<D, E>
 where
     D: Buf + From<&'static B> + From<B::Owned>,
     B: ToOwned + ?Sized,
@@ -105,7 +114,7 @@ where
     }
 }
 
-impl<D> From<String> for Full<D>
+impl<D, E> From<String> for Full<D, E>
 where
     D: Buf + From<String>,
 {
@@ -114,7 +123,7 @@ where
     }
 }
 
-impl<D> From<&'static str> for Full<D>
+impl<D, E> From<&'static str> for Full<D, E>
 where
     D: Buf + From<&'static str>,
 {
@@ -130,7 +139,7 @@ mod tests {
 
     #[tokio::test]
     async fn full_returns_some() {
-        let mut full = Full::new(&b"hello"[..]);
+        let mut full = Full::<_, Infallible>::new(&b"hello"[..]);
         assert_eq!(full.size_hint().exact(), Some(b"hello".len() as u64));
         assert_eq!(
             full.frame().await.unwrap().unwrap().into_data().unwrap(),
@@ -141,7 +150,7 @@ mod tests {
 
     #[tokio::test]
     async fn empty_full_returns_none() {
-        assert!(Full::<&[u8]>::default().frame().await.is_none());
-        assert!(Full::new(&b""[..]).frame().await.is_none());
+        assert!(Full::<&[u8], Infallible>::default().frame().await.is_none());
+        assert!(Full::<_, Infallible>::new(&b""[..]).frame().await.is_none());
     }
 }
